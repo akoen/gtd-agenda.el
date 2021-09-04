@@ -92,42 +92,55 @@
                    ('stuck 'all-the-icons-purple)
                    ('not-todo (throw 'not-todo nil))
                    (default 'default))))
-      (format "%s%s %s\n"
-              (make-string (* 2 depth) 32)
-              keyword
-              (org-add-props text nil 'face face 'font-lock-fontified t)))))
+      (->> (format "%s%s %s\n"
+                   (make-string (* 2 depth) 32)
+                   keyword
+                   (org-add-props text nil 'face face 'font-lock-fontified t))
+           (org-agenda-highlight-todo)))))
 
-(defun +agenda-projects-process-entry (element depth)
-  (let ((formatted-headline (+agenda-format-heading element depth)))
-    (if formatted-headline (insert formatted-headline)))
-  (dolist (child (+agenda-projects-list-child-headings element))
-    (+agenda-projects-process-entry child (1+ depth))))
+  (defun +agenda-projects-process-entry (element depth)
+    (let ((formatted-headline (+agenda-format-heading element depth)))
+      (if formatted-headline (insert formatted-headline)))
+    (dolist (child (+agenda-projects-list-child-headings element))
+      (+agenda-projects-process-entry child (1+ depth))))
 
 
-(defun +agenda-projects-block (_)
-  "Format a custom GTD agenda."
-  ;; TODO Remove different display-buffer-alist upon completion.
-  ;; (let ((display-buffer-alist tmp-org-agenda-display-buffer-alist))
-  ;;   (org-agenda-prepare))
-  (let ((elements (org-ql-select
-                    (org-agenda-files)
-                    '(and (todo)
-                          (children (todo))
-                          (not (parent (todo))))
-                    :action #'element-with-markers)))
-    (dolist (element elements)
-      (+agenda-projects-process-entry element 0)
-      (insert "\n")))
-  (org-agenda-finalize))
+  (defun +agenda-projects-block (_)
+    "Format a custom GTD agenda."
+    ;; TODO Remove different display-buffer-alist upon completion.
+    ;; (let ((display-buffer-alist tmp-org-agenda-display-buffer-alist))
+    ;;   (org-agenda-prepare))
+    (let ((inhibit-read-only t)
+          (elements (org-ql-select
+                      (org-agenda-files)
+                      '(and (todo)
+                            (children (todo))
+                            (not (parent (todo))))
+                      :action #'element-with-markers)))
+      (goto-char (point-max))
 
-(cl-pushnew '("e" "Experimental"
-              ((+agenda-projects-block nil)))
-            org-agenda-custom-commands)
+      ;; Overriding header
+      (insert (org-add-props "\nPROJECTS\n" nil 'face 'org-agenda-structure) "\n")
 
-(general-define-key :keymaps 'override "<f1>" (lambda ()
-                                                (interactive)
-                                                ;; (+agenda-projects-block nil)
-                                                (let ((org-agenda-custom-commands
-                                                       '(("g" "Get Things Done (GTD)"
-                                                          ((+agenda-projects-block nil))))))
-                                                  (org-agenda nil "g"))))
+      ;; Contents
+      (dolist (element elements)
+        (+agenda-projects-process-entry element 0)
+        (insert "\n"))))
+
+
+  ;; Testing keybindings
+  (general-define-key :keymaps 'override "<f1>" (lambda ()
+                                                  (interactive)
+                                                  ;; (+agenda-projects-block nil)
+                                                  (let ((org-agenda-custom-commands
+                                                         '(("g" "Get Things Done (GTD)"
+                                                            ((+agenda-projects-block nil))))))
+                                                    (org-agenda nil "g"))))
+
+  (general-define-key :keymaps 'override "<f2>" (lambda ()
+                                                  (interactive)
+                                                  (let ((display-buffer-alist tmp-org-agenda-display-buffer-alist))
+                                                    (org-agenda-prepare))
+                                                  (+agenda-projects-block nil)))
+
+  (provide 'gtd-agenda)
