@@ -1,0 +1,12 @@
+#+title: gtd-agenda.el - Get Things Done with Org
+#+author: Alex Koen
+
+* Introduction
+
+Inspired by https://github.com/pestctrl/emacs-config/blob/84c557982a860e86d6f67976a82ea776a7bd2c7a/config-org-new.org#my-own-agenda-renderer
+
+* Nomenclature
+
+- Project :: Any task with at least one sub-task.
+- Active task :: A task that is either scheduled, has a deadline, or has the =NEXT= keyword.
+- Stuck project :: A project that has no active sub-tasks or sub-projects.

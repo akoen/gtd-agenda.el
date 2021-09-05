@@ -1,5 +1,34 @@
-;; Inspired by:
+;;; gtd-agenda.el --- custom org-agenda, inspired by GTD -*- ;; lexical-binding: t -*-
+
+;; Copyright (C) 2021  Free Software Foundation, Inc.
+
+;; Author: Alex Camarena <akoen@mailbox.org>
+;; Maintainer: Alex Camarena <akoen@mailbox.org>
+;; Created: 2021
+;; Version: 0.1
+;; Package-Requires: ((emacs "26.1"))
+;; Homepage: https://github.com/akoen/gtd-agenda.el
+
+;; This file is part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
 ;; https://github.com/pestctrl/emacs-config/blob/84c557982a860e86d6f67976a82ea776a7bd2c7a/config-org-new.org#my-own-agenda-renderer
+
+;;; Code:
 
 (straight-use-package 'org-ql)
 (require 'org-ql-view)
@@ -86,6 +115,7 @@
                  ('deadline '+agenda-deadline-face)
                  ('scheduled 'org-default)
                  ('waiting '+agenda-waiting-face)
+                 ('next 'org-agenda-dimmed-todo-face)
                  ('stuck '+agenda-stuck-face)
                  ('done 'org-done)
                  ('default 'default)))
@@ -236,3 +266,4 @@ return an empty string."
                                                   (+agenda-projects-block nil))))
 
 (provide 'gtd-agenda)
+;;; gtd-agenda.el ends here
