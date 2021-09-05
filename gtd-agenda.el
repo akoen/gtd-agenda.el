@@ -4,38 +4,9 @@
 (straight-use-package 'org-ql)
 (require 'org-ql-view)
 
-(setq tmp-org-agenda-display-buffer-alist '(("\\*Org Agenda\\*"
-                                             (+popup-buffer)
-                                             (actions)
-                                             (side . bottom)
-                                             (size 0.25)
-                                             (window-width . 40)
-                                             (window-height . 0.16)
-                                             (slot)
-                                             (vslot)
-                                             (window-parameters
-                                              (ttl . 5)
-                                              (quit . t)
-                                              (select . t)
-                                              (modeline)
-                                              (autosave)
-                                              (transient . t)
-                                              (no-other-window . t)))))
-
-(cl-defstruct +agenda-headline todo? keyword text deadline)
-
 (defun +agenda-projects-add-next-face (string)
   (let ((face 'org-priority))
     (org-add-props string nil 'face face 'font-lock-fontified t)))
-
-;; (defun +agenda-projects-list-child-headings (parent query)
-;;   "Return list of child elements of `PARENT' that match the org-ql
-;; query `QUERY'."
-;;   ;; REVIEW This regexp-based approach is wildly inefficient.
-;;   (org-ql-select (org-agenda-files)
-;;     `(and ,query
-;;           (parent (heading-regexp ,(org-element-property :raw-value parent))))
-;;     :action #'element-with-markers))
 
 (defun +agenda-projects-list-child-headings (parent)
   "Return each subheading of PARENT, formatted as an org-element with markers."
@@ -56,91 +27,184 @@
                                    while (outline-get-next-sibling)))))))
 
 (defun +agenda-projects-get-heading-status (heading)
-  (if-let ((children (+agenda-projects-list-child-headings heading)))
-      (let* ((child-statuses (mapcar (lambda (child)
-                                       (+agenda-projects-get-heading-status child))
-                                     children)))
+  "Return the status of gtd task HEADING."
+  (let* ((status (org-element-property :status heading))
+         (children (+agenda-projects-list-child-headings heading))
+         (child-statuses (mapcar (lambda (child) (+agenda-projects-get-heading-status child)) children))
+         (children-all-done (cl-every (lambda (status) (eq 'done status)) child-statuses)))
+    (cond
+     ;; Status already calculated.
+     (status status)
+     ;; No sub-tasks: status determined by properties.
+     ((or (not children) children-all-done)
+      (let* ((todo-type (org-element-property :todo-type heading))
+             (keyword (org-element-property :todo-keyword heading))
+             (scheduled (org-element-property :scheduled heading))
+             (deadline (org-element-property :deadline heading)))
         (cond
+         ((eq todo-type 'done) 'done)
+         (deadline 'deadline)
+         (scheduled 'scheduled)
+         ((string-equal keyword "NEXT") 'next)
+         ((string-equal keyword "WAITING") 'waiting)
+         ((string-equal keyword "TODO") 'stuck))))
+     ;; Sub-tasks: status determined by children
+     (t (cond
          ((member 'deadline child-statuses) 'deadline)
-         ((member 'waiting child-statuses) 'waiting)
          ((member 'next child-statuses) 'not-stuck)
-         (t 'stuck)))
-    ;; (org-element-put-property heading :status status))
+         ((member 'waiting child-statuses) 'waiting)
+         (t 'stuck))))))
 
-    (let* ((todo-type (org-element-property :todo-type heading))
-           (keyword (org-element-property :todo-keyword heading))
-           (scheduled (org-element-property :scheduled heading))
-           (deadline (org-element-property :deadline heading)))
-      (cond
-       ((eq todo-type 'done) 'not-todo)
-       (deadline 'deadline)
-       (scheduled 'scheduled)
-       ((string-equal keyword "NEXT") 'next)
-       ((string-equal keyword "WAITING") 'waiting)
-       ((string-equal keyword "TODO") 'stuck)))))
-;; (org-element-put-property heading :status status))))
-
-(defun +agenda-format-heading (heading depth)
-  "Formats HEADING as an agenda entry at DEPTH."
-  (catch 'not-todo
-    (let* ((text (org-element-property :raw-value heading))
-           (keyword (org-element-property :todo-keyword heading))
-           (status (+agenda-projects-get-heading-status heading))
-           (face (pcase status
-                   ('deadline 'all-the-icons-red)
-                   ('waiting 'all-the-icons-blue)
-                   ('stuck 'all-the-icons-purple)
-                   ('not-todo (throw 'not-todo nil))
-                   (default 'default))))
-      (->> (format "%s%s %s\n"
-                   (make-string (* 2 depth) 32)
-                   keyword
-                   (org-add-props text nil 'face face 'font-lock-fontified t))
-           (org-agenda-highlight-todo)))))
-
-  (defun +agenda-projects-process-entry (element depth)
-    (let ((formatted-headline (+agenda-format-heading element depth)))
-      (if formatted-headline (insert formatted-headline)))
-    (dolist (child (+agenda-projects-list-child-headings element))
-      (+agenda-projects-process-entry child (1+ depth))))
+(defun +agenda-add-status-face (heading)
+  (let* ((text (org-element-property :raw-value heading))
+         (keyword (org-element-property :todo-keyword heading))
+         (status (+agenda-projects-get-heading-status heading))
+         (face (pcase status
+                 ('deadline 'all-the-icons-red)
+                 ('scheduled 'all-the-icons-red)
+                 ('waiting 'all-the-icons-blue)
+                 ('stuck 'all-the-icons-purple)
+                 ('done 'org-done)
+                 (default 'default)))
+         (title (--> (org-element-property :raw-value element)
+                     (org-add-props it nil 'face face))))
+    (org-element-put-property element :title title)))
 
 
-  (defun +agenda-projects-block (_)
-    "Format a custom GTD agenda."
-    ;; TODO Remove different display-buffer-alist upon completion.
-    ;; (let ((display-buffer-alist tmp-org-agenda-display-buffer-alist))
-    ;;   (org-agenda-prepare))
-    (let ((inhibit-read-only t)
-          (elements (org-ql-select
-                      (org-agenda-files)
-                      '(and (todo)
-                            (children (todo))
-                            (not (parent (todo))))
-                      :action #'element-with-markers)))
-      (goto-char (point-max))
+(defun +agenda-format-heading (element depth)
+  "Return ELEMENT as a string with text-properties set by its property list.
+Its property list should be the second item in the list, as
+returned by `org-element-parse-buffer'.  If ELEMENT is nil,
+return an empty string."
+  (if (not element)
+      ""
+    (let* ((properties (cadr element))
+           ;; Remove the :parent property, which so bloats the size of
+           ;; the properties list that it makes it essentially
+           ;; impossible to debug, because Emacs takes approximately
+           ;; forever to show it in the minibuffer or with
+           ;; `describe-text-properties'.  FIXME: Shouldn't be necessary
+           ;; anymore since we're not parsing the whole buffer.
 
-      ;; Overriding header
-      (insert (org-add-props "\nPROJECTS\n" nil 'face 'org-agenda-structure) "\n")
+           ;; Also, remove ":" from key symbols.  FIXME: It would be
+           ;; better to avoid this somehow.  At least, we should use a
+           ;; function to convert plists to alists, if possible.
+           (properties (cl-loop for (key val) on properties by #'cddr
+                                for symbol = (intern (cl-subseq (symbol-name key) 1))
+                                unless (member symbol '(parent))
+                                append (list symbol val)))
+           ;; TODO: --add-faces is used to add the :relative-due-date property, but that fact is
+           ;; hidden by doing it through --add-faces (which calls --add-scheduled-face and
+           ;; --add-deadline-face), and doing it in this form that gets the title hides it even more.
+           ;; Adding the relative due date property should probably be done explicitly and separately
+           ;; (which would also make it easier to do it independently of faces, etc).
+           (title (--> (+agenda-add-status-face element)
+                       (org-element-property :raw-value it)
+                       (org-link-display-format it)))
+           (todo-keyword (-some--> (org-element-property :todo-keyword element)
+                           (org-ql-view--add-todo-face it)))
+           (tag-list (if org-use-tag-inheritance
+                         ;; MAYBE: Use our own variable instead of `org-use-tag-inheritance'.
+                         (if-let ((marker (or (org-element-property :org-hd-marker element)
+                                              (org-element-property :org-marker element))))
+                             (with-current-buffer (marker-buffer marker)
+                               (org-with-wide-buffer
+                                (goto-char marker)
+                                (cl-loop for type in (org-ql--tags-at marker)
+                                         unless (or (eq 'org-ql-nil type)
+                                                    (not type))
+                                         append type)))
+                           ;; No marker found
+                           ;; TODO: Use `display-warning' with `org-ql' as the type.
+                           (warn "No marker found for item: %s" title)
+                           (org-element-property :tags element))
+                       (org-element-property :tags element)))
+           (tag-string (when tag-list
+                         (--> tag-list
+                              (s-join ":" it)
+                              (s-wrap it ":")
+                              (org-add-props it nil 'face 'org-tag))))
+           ;;  (category (org-element-property :category element))
+           (priority-string (-some->> (org-element-property :priority element)
+                              (char-to-string)
+                              (format "[#%s]")
+                              (org-ql-view--add-priority-face)))
+           (habit-property (org-with-point-at (org-element-property :begin element)
+                             (when (org-is-habit-p)
+                               (org-habit-parse-todo))))
+           (due-string (pcase (org-element-property :relative-due-date element)
+                         ('nil "")
+                         (string (format " %s " (org-add-props string nil 'face 'org-ql-view-due-date)))))
+           (string (s-join " " (-non-nil (list todo-keyword priority-string title due-string tag-string)))))
+      (remove-list-of-text-properties 0 (length string) '(line-prefix) string)
+      ;; Add all the necessary properties and faces to the whole string
+      (--> string
+           (concat (make-string (* 2 depth) 32) it)
+           (org-add-props it properties
+             'org-agenda-type 'search
+             'todo-state todo-keyword
+             'tags tag-list
+             'org-habit-p habit-property)))))
 
-      ;; Contents
-      (dolist (element elements)
-        (+agenda-projects-process-entry element 0)
-        (insert "\n"))))
+(defun +agenda-projects-process-entry (element depth)
+  (let ((formatted-headline (+agenda-format-heading element depth)))
+    (if formatted-headline (insert formatted-headline "\n")))
+  (dolist (child (+agenda-projects-list-child-headings element))
+    (+agenda-projects-process-entry child (1+ depth))))
 
 
-  ;; Testing keybindings
-  (general-define-key :keymaps 'override "<f1>" (lambda ()
-                                                  (interactive)
-                                                  ;; (+agenda-projects-block nil)
-                                                  (let ((org-agenda-custom-commands
-                                                         '(("g" "Get Things Done (GTD)"
-                                                            ((+agenda-projects-block nil))))))
-                                                    (org-agenda nil "g"))))
+(defun +agenda-projects-block (_)
+  "Format a custom GTD agenda."
+  (let ((inhibit-read-only t)
+        (elements (org-ql-select
+                    (org-agenda-files)
+                    '(and (todo)
+                          (children (todo))
+                          (not (parent (todo))))
+                    :action #'element-with-markers)))
+    (goto-char (point-max))
 
-  (general-define-key :keymaps 'override "<f2>" (lambda ()
-                                                  (interactive)
-                                                  (let ((display-buffer-alist tmp-org-agenda-display-buffer-alist))
-                                                    (org-agenda-prepare))
-                                                  (+agenda-projects-block nil)))
+    ;; Overriding header
+    (insert (org-add-props "\nPROJECTS\n" nil 'face 'org-agenda-structure) "\n")
 
-  (provide 'gtd-agenda)
+    ;; Contents
+    (dolist (element elements)
+      (+agenda-projects-process-entry element 0)
+      (insert "\n"))))
+
+
+;; Testing configuration
+(setq tmp-org-agenda-display-buffer-alist '(("\\*Org Agenda\\*"
+                                             (+popup-buffer)
+                                             (actions)
+                                             (side . bottom)
+                                             (size 0.25)
+                                             (window-width . 40)
+                                             (window-height . 0.16)
+                                             (slot)
+                                             (vslot)
+                                             (window-parameters
+                                              (ttl . 5)
+                                              (quit . t)
+                                              (select . t)
+                                              (modeline)
+                                              (autosave)
+                                              (transient . t)
+                                              (no-other-window . t)))))
+(general-define-key :keymaps 'override "<f1>" (lambda ()
+                                                (interactive)
+                                                ;; (+agenda-projects-block nil)
+                                                (let ((org-agenda-files '("~/Programming/gtd-agenda/test-agenda-file.org"))
+                                                      (org-agenda-custom-commands
+                                                       '(("g" "Get Things Done (GTD)"
+                                                          ((+agenda-projects-block nil))))))
+                                                  (org-agenda nil "g"))))
+
+(general-define-key :keymaps 'override "<f2>" (lambda ()
+                                                (interactive)
+                                                (let ((org-agenda-files '("~/Programming/gtd-agenda/test-agenda-file.org"))
+                                                      (display-buffer-alist tmp-org-agenda-display-buffer-alist))
+                                                  (org-agenda-prepare)
+                                                  (+agenda-projects-block nil))))
+
+(provide 'gtd-agenda)

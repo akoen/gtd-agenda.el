@@ -1,0 +1,20 @@
+* TODO Project 1
+** NEXT Next item
+
+* TODO Project 2
+** TODO Deadline
+DEADLINE: <2021-09-11 Sat>
+
+* Project 3
+** TODO Dangling TODO
+
+* TODO Project 4
+** TODO All children done
+*** DONE Done item
+
+* TODO Project 5 
+** WAITING Must wait
+
+* TODO Project 5 
+** WAITING Must wait
+** NEXT Nevermind
