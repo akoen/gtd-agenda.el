@@ -4,6 +4,26 @@
 (straight-use-package 'org-ql)
 (require 'org-ql-view)
 
+(defface +agenda-deadline-face
+  '((t :inherit org-upcoming-deadline
+       :weight bold))
+  "Face used for GTD deadlines."
+  :group 'gtd-agenda)
+
+(defface +agenda-stuck-face
+  '((t :inherit org-upcoming-deadline
+       :foreground "#800080"
+       :weight bold))
+  "Face used for GTD stuck projects."
+  :group 'gtd-agenda)
+
+(defface +agenda-waiting-face
+  '((t :inherit org-upcoming-deadline
+       :foreground "#0096FF"
+       :weight bold))
+  "Face used for GTD waiting projects."
+  :group 'gtd-agenda)
+
 (defun +agenda-projects-add-next-face (string)
   (let ((face 'org-priority))
     (org-add-props string nil 'face face 'font-lock-fontified t)))
@@ -31,7 +51,8 @@
   (let* ((status (org-element-property :status heading))
          (children (+agenda-projects-list-child-headings heading))
          (child-statuses (mapcar (lambda (child) (+agenda-projects-get-heading-status child)) children))
-         (children-all-done (cl-every (lambda (status) (eq 'done status)) child-statuses)))
+         (children-all-done (cl-every (lambda (status) (eq 'done status)) child-statuses))
+         (children-all-inactive (cl-every (lambda (status) (member status '(inactive stuck done))) child-statuses)))
     (cond
      ;; Status already calculated.
      (status status)
@@ -42,30 +63,32 @@
              (scheduled (org-element-property :scheduled heading))
              (deadline (org-element-property :deadline heading)))
         (cond
-         ((eq todo-type 'done) 'done)
-         (deadline 'deadline)
-         (scheduled 'scheduled)
-         ((string-equal keyword "NEXT") 'next)
+         ((eq todo-type 'done)             'done)
+         (deadline                         'deadline)
+         (scheduled                        'scheduled)
+         ((string-equal keyword "NEXT")    'next)
          ((string-equal keyword "WAITING") 'waiting)
-         ((string-equal keyword "TODO") 'stuck))))
+         ((string-equal keyword "TODO")    'inactive)
+         (t                                'default))))
      ;; Sub-tasks: status determined by children
      (t (cond
          ((member 'deadline child-statuses) 'deadline)
-         ((member 'next child-statuses) 'not-stuck)
-         ((member 'waiting child-statuses) 'waiting)
-         (t 'stuck))))))
+         ((member 'next child-statuses)     'not-stuck)
+         ((member 'waiting child-statuses)  'waiting)
+         (children-all-inactive             'stuck)
+         (t                                 'default))))))
 
 (defun +agenda-add-status-face (heading)
   (let* ((text (org-element-property :raw-value heading))
          (keyword (org-element-property :todo-keyword heading))
          (status (+agenda-projects-get-heading-status heading))
          (face (pcase status
-                 ('deadline 'all-the-icons-red)
-                 ('scheduled 'all-the-icons-red)
-                 ('waiting 'all-the-icons-blue)
-                 ('stuck 'all-the-icons-purple)
+                 ('deadline '+agenda-deadline-face)
+                 ('scheduled 'org-default)
+                 ('waiting '+agenda-waiting-face)
+                 ('stuck '+agenda-stuck-face)
                  ('done 'org-done)
-                 (default 'default)))
+                 ('default 'default)))
          (title (--> (org-element-property :raw-value element)
                      (org-add-props it nil 'face face))))
     (org-element-put-property element :title title)))
@@ -101,6 +124,7 @@ return an empty string."
            (title (--> (+agenda-add-status-face element)
                        (org-element-property :raw-value it)
                        (org-link-display-format it)))
+           (status (+agenda-projects-get-heading-status element))
            (todo-keyword (-some--> (org-element-property :todo-keyword element)
                            (org-ql-view--add-todo-face it)))
            (tag-list (if org-use-tag-inheritance
@@ -138,17 +162,21 @@ return an empty string."
            (string (s-join " " (-non-nil (list todo-keyword priority-string title due-string tag-string)))))
       (remove-list-of-text-properties 0 (length string) '(line-prefix) string)
       ;; Add all the necessary properties and faces to the whole string
-      (--> string
-           (concat (make-string (* 2 depth) 32) it)
-           (org-add-props it properties
-             'org-agenda-type 'search
-             'todo-state todo-keyword
-             'tags tag-list
-             'org-habit-p habit-property)))))
+      (if (eq status 'done)
+          ""
+        (--> string
+             (concat (make-string (* 2 depth) 32) it)
+             (org-add-props it properties
+               'org-agenda-type 'search
+               'todo-state todo-keyword
+               'tags tag-list
+               'org-habit-p habit-property))))))
 
 (defun +agenda-projects-process-entry (element depth)
-  (let ((formatted-headline (+agenda-format-heading element depth)))
-    (if formatted-headline (insert formatted-headline "\n")))
+  (let ((status (+agenda-projects-get-heading-status element))
+        (formatted-headline (+agenda-format-heading element depth)))
+    (unless (eq status 'done)
+      (insert formatted-headline "\n")))
   (dolist (child (+agenda-projects-list-child-headings element))
     (+agenda-projects-process-entry child (1+ depth))))
 
@@ -169,7 +197,7 @@ return an empty string."
 
     ;; Contents
     (dolist (element elements)
-      (+agenda-projects-process-entry element 0)
+      (+agenda-projects-process-entry element 1)
       (insert "\n"))))
 
 
