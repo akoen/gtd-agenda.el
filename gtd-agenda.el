@@ -206,7 +206,7 @@ return an empty string."
 (defun +agenda-projects-process-entry (element depth)
   (let ((status (+agenda-projects-get-heading-status element))
         (formatted-headline (+agenda-format-heading element depth)))
-    (unless (eq status 'done)
+    (unless (member status '(done inactive))
       (insert formatted-headline "\n")))
   (dolist (child (+agenda-projects-list-child-headings element))
     (+agenda-projects-process-entry child (1+ depth))))
