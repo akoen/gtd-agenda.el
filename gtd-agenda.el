@@ -151,7 +151,8 @@ return an empty string."
            ;; --add-deadline-face), and doing it in this form that gets the title hides it even more.
            ;; Adding the relative due date property should probably be done explicitly and separately
            ;; (which would also make it easier to do it independently of faces, etc).
-           (title (--> (+agenda-add-status-face element)
+           (title (--> (org-ql-view--add-faces element)
+                       (+agenda-add-status-face it)
                        (org-element-property :raw-value it)
                        (org-link-display-format it)))
            (status (+agenda-projects-get-heading-status element))
