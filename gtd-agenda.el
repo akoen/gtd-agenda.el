@@ -253,7 +253,7 @@ return an empty string."
 (general-define-key :keymaps 'override "<f1>" (lambda ()
                                                 (interactive)
                                                 ;; (+agenda-projects-block nil)
-                                                (let ((org-agenda-files '("~/Programming/gtd-agenda/test-agenda-file.org"))
+                                                (let ((org-agenda-files (directory-files "./" t "test-agenda-file\.org"))
                                                       (org-agenda-custom-commands
                                                        '(("g" "Get Things Done (GTD)"
                                                           ((+agenda-projects-block nil))))))
@@ -261,7 +261,7 @@ return an empty string."
 
 (general-define-key :keymaps 'override "<f2>" (lambda ()
                                                 (interactive)
-                                                (let ((org-agenda-files '("~/Programming/gtd-agenda/test-agenda-file.org"))
+                                                (let ((org-agenda-files (directory-files "./" t "test-agenda-file\.org"))
                                                       (display-buffer-alist tmp-org-agenda-display-buffer-alist))
                                                   (org-agenda-prepare)
                                                   (+agenda-projects-block nil))))
