@@ -33,6 +33,9 @@
 (straight-use-package 'org-ql)
 (require 'org-ql-view)
 
+(defvar +agenda-show-all nil
+  "Whether to show all tasks instead of only active tasks")
+
 (defface +agenda-deadline-face
   '((t :inherit org-upcoming-deadline
        :weight bold))
@@ -197,20 +200,18 @@ return an empty string."
            (string (s-join " " (-non-nil (list todo-keyword priority-string title due-string tag-string)))))
       (remove-list-of-text-properties 0 (length string) '(line-prefix) string)
       ;; Add all the necessary properties and faces to the whole string
-      (if (eq status 'done)
-          ""
-        (--> string
-             (concat (make-string (* 2 depth) 32) it)
-             (org-add-props it properties
-               'org-agenda-type 'search
-               'todo-state todo-keyword
-               'tags tag-list
-               'org-habit-p habit-property))))))
+      (--> string
+           (concat (make-string (* 2 depth) 32) it)
+           (org-add-props it properties
+             'org-agenda-type 'search
+             'todo-state todo-keyword
+             'tags tag-list
+             'org-habit-p habit-property)))))
 
 (defun +agenda-projects-process-entry (element depth)
   (let ((status (+agenda-projects-get-heading-status element))
         (formatted-headline (+agenda-format-heading element depth)))
-    (unless (member status '(done inactive))
+    (unless (and (member status '(done inactive)) (not +agenda-show-all))
       (insert formatted-headline "\n")))
   (dolist (child (+agenda-projects-list-child-headings element))
     (+agenda-projects-process-entry child (1+ depth))))
