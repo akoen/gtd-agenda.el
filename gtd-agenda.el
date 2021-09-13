@@ -78,6 +78,7 @@
 (defun +agenda-projects-get-heading-status (heading)
   "Return the status of gtd task HEADING."
   (let* ((status (org-element-property :status heading))
+         (keyword (org-element-property :todo-keyword heading))
          (children (+agenda-projects-list-child-headings heading))
          (child-statuses (mapcar (lambda (child) (+agenda-projects-get-heading-status child)) children))
          (children-all-done (cl-every (lambda (status) (eq 'done status)) child-statuses))
@@ -86,9 +87,8 @@
      ;; Status already calculated.
      (status status)
      ;; No sub-tasks: status determined by properties.
-     ((or (not children) children-all-done)
+     ((not children)
       (let* ((todo-type (org-element-property :todo-type heading))
-             (keyword (org-element-property :todo-keyword heading))
              (scheduled (org-element-property :scheduled heading))
              (deadline (org-element-property :deadline heading)))
         (cond
@@ -104,6 +104,9 @@
          ((member 'deadline child-statuses) 'deadline)
          ((member 'next child-statuses)     'not-stuck)
          ((member 'waiting child-statuses)  'waiting)
+         ((and
+           children-all-done
+           (string-equal keyword "DONE"))   'done)
          (children-all-inactive             'stuck)
          (t                                 'default))))))
 
@@ -219,7 +222,7 @@ return an empty string."
         (elements (org-ql-select
                     (org-agenda-files)
                     '(and (todo)
-                          (children (todo))
+                          (children (or (todo) (done)))
                           (not (parent (todo))))
                     :action #'element-with-markers)))
     (goto-char (point-max))
