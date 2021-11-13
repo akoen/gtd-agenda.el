@@ -81,24 +81,24 @@
                               (org-element-headline-parser
                                (line-end-position)))
                             while (outline-get-next-sibling))))
-              (org-element-put-property :children children)
-              children)))))))
+              ;; (org-element-put-property :children children)
+              children
+              )))))))
 
 (defun +agenda-root-task-status (heading)
   "Compute the status of root-level task HEADING (no children)."
   (cl-assert (not (+agenda-children heading)))
-  (let* ((todo-type (org-element-property :todo-type heading))
-         (scheduled (org-element-property :scheduled heading))
-         (deadline (org-element-property :deadline heading))
-         (keyword (org-element-property :todo-keyword heading)))
-    (cond
-     ((eq todo-type 'done)             'done)
-     (deadline                         'deadline)
-     (scheduled                        'scheduled)
-     ((string-equal keyword "NEXT")    'next)
-     ((string-equal keyword "WAITING") 'waiting)
-     ((string-equal keyword "TODO")    'inactive)
-     (t                                'default))))
+  (cl-macrolet ((task-prop (prop)
+                           `(org-element-property ,prop heading)))
+
+      (cond
+       ((eq (task-prop :todo-type) 'done)                  'done)
+       ((task-prop :deadline)                              'deadline)
+       ((task-prop :scheduled)                             'scheduled)
+       ((string-equal (task-prop :todo-keyword) "NEXT")    'next)
+       ((string-equal (task-prop :todo-keyword) "WAITING") 'waiting)
+       ((string-equal (task-prop :todo-keyword) "TODO")    'inactive)
+       (t                                'default)))))
 
 (defun +agenda-projects-get-heading-status (heading)
   "Return the status of GTD task HEADING."
@@ -231,6 +231,23 @@ return an empty string."
     (dolist (child children)
       (+agenda-projects-process-entry child (1+ depth)))))
 
+(defun +agenda-sort-pred (h1 h2)
+  "Returns t if task H1 should appear before H2"
+  (message "%s" (org-element-property :priority h1)))
+
+(defun +agenda-compare-priority (a b)
+  (cl-macrolet ((priority (item)
+                          `(org-element-property :priority ,item)))
+    ;; NOTE: Priorities are numbers in Org elements.  This might differ from the priority selector logic.
+    (let ((a-priority (priority a))
+          (b-priority (priority b)))
+      (cond ((and a-priority b-priority)
+             (< a-priority b-priority))
+            (a-priority t)
+            (b-priority nil)))))
+
+
+
 (defun +agenda-projects-block (_)
   "Format a custom GTD agenda."
   (let ((inhibit-read-only t)
@@ -248,6 +265,7 @@ return an empty string."
     ;; Contents
     (dolist (element elements)
       (+agenda-projects-process-entry element 1)
+      ;; (sort elements #'+agenda-sort-pred)
       (insert "\n"))))
 
 (provide 'gtd-agenda)
