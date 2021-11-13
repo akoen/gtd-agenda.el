@@ -98,7 +98,7 @@
        ((string-equal (task-prop :todo-keyword) "NEXT")    'next)
        ((string-equal (task-prop :todo-keyword) "WAITING") 'waiting)
        ((string-equal (task-prop :todo-keyword) "TODO")    'inactive)
-       (t                                'default)))))
+       (t                                                  'default))))
 
 (defun +agenda-projects-get-heading-status (heading)
   "Return the status of GTD task HEADING."
