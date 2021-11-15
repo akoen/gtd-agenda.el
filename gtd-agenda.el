@@ -32,6 +32,8 @@
 
 ;;; Code:
 
+;; TODO Shouldn't have 'default status - should handle all cases
+
 (straight-use-package 'org-ql)
 (require 'org-ql-view)
 
@@ -123,10 +125,11 @@
                  children-all-done
                  (string-equal keyword "DONE"))   'done)
                (children-all-inactive             'stuck)
-               (t                                 (error "Could not determine status")))))))
+               (t                                 'default))))))
       (org-element-put-property heading :status status)
       status)))
 
+;; Visual formatting
 
 (defun +agenda-add-status-face (heading)
   (let* ((text (org-element-property :raw-value heading))
@@ -146,7 +149,7 @@
     (org-element-put-property element :title title)))
 
 
-(defun +agenda-format-heading (element depth)
+(defun +agenda-format-heading (element depth prefix)
   "Return ELEMENT as a string with text-properties set by its property list.
 Its property list should be the second item in the list, as
 returned by `org-element-parse-buffer'.  If ELEMENT is nil,
@@ -216,25 +219,20 @@ return an empty string."
       (remove-list-of-text-properties 0 (length string) '(line-prefix) string)
       ;; Add all the necessary properties and faces to the whole string
       (--> string
-           (concat (make-string (* 2 depth) 32) it)
+           (concat prefix it)
            (org-add-props it properties
              'org-agenda-type 'search
              'todo-state todo-keyword
              'tags tag-list
              'org-habit-p habit-property)))))
 
-(defun +agenda-insert-tasks (tasks depth)
-  "Insert TASKS and, recursively, their children, into the agenda
-buffer at DEPTH."
-  (dolist (task (sort tasks #'+agenda-sort-pred))
-    (let ((status (+agenda-projects-get-heading-status task))
-          (children (+agenda-children task))
-          (formatted-headline (+agenda-format-heading task depth)))
-      (message "%s" status)
-      (unless (and (member status '(done inactive)) (not +agenda-show-all))
-        (when (eq depth 1) (insert "\n")) ;; Space out top-level projects
-        (insert formatted-headline "\n")
-        (+agenda-insert-tasks children (1+ depth))))))
+(defun +agenda-task-prefix (depth endp)
+  (if (zerop depth)
+      ""
+    (concat
+     ;; (when (not (zerop depth)) "|")
+     (make-string depth 32)
+     (if endp "╰⮞" "├⮞"))))
 
 ;; Sorting
 
@@ -255,7 +253,7 @@ buffer at DEPTH."
             (h2-priority nil)))))
 
 (defvar +agenda-status-priority
-  '(stuck scheduled deadline next not-stuck waiting inactive done))
+  '(stuck scheduled deadline next not-stuck waiting default inactive done))
 
 
 (defun +agenda-compare-status (t1 t2)
@@ -285,8 +283,23 @@ See also `+agenda-status-priority'."
     (insert (org-add-props "\nPROJECTS\n" nil 'face 'org-agenda-structure) "\n")
 
     ;; Contents
-    (+agenda-insert-tasks elements 1)
+    (+agenda-insert-tasks elements 0)
     (insert "\n")))
+
+(defun +agenda-insert-tasks (tasks depth)
+  "Insert TASKS and, recursively, their children, into the agenda
+buffer at DEPTH."
+  (dolist (task (sort tasks #'+agenda-sort-pred))
+    (let* ((status (+agenda-projects-get-heading-status task))
+          (children (+agenda-children task))
+          (prefix (+agenda-task-prefix depth (eq task (car (last tasks)))))
+          (formatted-headline (+agenda-format-heading task depth prefix)))
+      (message "%s" status)
+      (unless (and (member status '(done inactive)) (not +agenda-show-all))
+        (when (eq depth 0) (insert "\n")) ;; Space out top-level projects
+        (insert formatted-headline "\n")
+        (+agenda-insert-tasks children (1+ depth))))))
+
 
 (provide 'gtd-agenda)
 ;;; gtd-agenda.el ends here
