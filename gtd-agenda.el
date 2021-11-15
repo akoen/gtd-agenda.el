@@ -26,6 +26,8 @@
 
 ;;; Commentary:
 
+;; Inspired by the following projects:
+;; https://github.com/weirdNox/dotfiles/blob/26c5c2739aff28af5ed4d6f243c7ec0e9b581821/config/.emacs.d/config.org#agenda
 ;; https://github.com/pestctrl/emacs-config/blob/84c557982a860e86d6f67976a82ea776a7bd2c7a/config-org-new.org#my-own-agenda-renderer
 
 ;;; Code:
@@ -78,8 +80,8 @@
           (when (org-goto-first-child)
             (let ((children
                    (cl-loop collect (org-ql--add-markers
-                              (org-element-headline-parser
-                               (line-end-position)))
+                                     (org-element-headline-parser
+                                      (line-end-position)))
                             while (outline-get-next-sibling))))
               ;; (org-element-put-property :children children)
               children
@@ -90,15 +92,14 @@
   (cl-assert (not (+agenda-children heading)))
   (cl-macrolet ((task-prop (prop)
                            `(org-element-property ,prop heading)))
-
-      (cond
-       ((eq (task-prop :todo-type) 'done)                  'done)
-       ((task-prop :deadline)                              'deadline)
-       ((task-prop :scheduled)                             'scheduled)
-       ((string-equal (task-prop :todo-keyword) "NEXT")    'next)
-       ((string-equal (task-prop :todo-keyword) "WAITING") 'waiting)
-       ((string-equal (task-prop :todo-keyword) "TODO")    'inactive)
-       (t                                                  'default))))
+    (cond
+     ((eq (task-prop :todo-type) 'done)                  'done)
+     ((task-prop :deadline)                              'deadline)
+     ((task-prop :scheduled)                             'scheduled)
+     ((string-equal (task-prop :todo-keyword) "NEXT")    'next)
+     ((string-equal (task-prop :todo-keyword) "WAITING") 'waiting)
+     ((string-equal (task-prop :todo-keyword) "TODO")    'inactive)
+     (t                                                  'default))))
 
 (defun +agenda-projects-get-heading-status (heading)
   "Return the status of GTD task HEADING."
@@ -122,7 +123,7 @@
                  children-all-done
                  (string-equal keyword "DONE"))   'done)
                (children-all-inactive             'stuck)
-               (t                                 'default))))))
+               (t                                 (error "Could not determine status")))))))
       (org-element-put-property heading :status status)
       status)))
 
@@ -222,31 +223,52 @@ return an empty string."
              'tags tag-list
              'org-habit-p habit-property)))))
 
-(defun +agenda-projects-process-entry (element depth)
-  (let ((status (+agenda-projects-get-heading-status element))
-        (children (+agenda-children element))
-        (formatted-headline (+agenda-format-heading element depth)))
-    (unless (and (member status '(done inactive)) (not +agenda-show-all))
-      (insert formatted-headline "\n"))
-    (dolist (child children)
-      (+agenda-projects-process-entry child (1+ depth)))))
+(defun +agenda-insert-tasks (tasks depth)
+  "Insert TASKS and, recursively, their children, into the agenda
+buffer at DEPTH."
+  (dolist (task (sort tasks #'+agenda-sort-pred))
+    (let ((status (+agenda-projects-get-heading-status task))
+          (children (+agenda-children task))
+          (formatted-headline (+agenda-format-heading task depth)))
+      (message "%s" status)
+      (unless (and (member status '(done inactive)) (not +agenda-show-all))
+        (when (eq depth 1) (insert "\n")) ;; Space out top-level projects
+        (insert formatted-headline "\n")
+        (+agenda-insert-tasks children (1+ depth))))))
+
+;; Sorting
 
 (defun +agenda-sort-pred (h1 h2)
-  "Returns t if task H1 should appear before H2"
-  (message "%s" (org-element-property :priority h1)))
+  "Returns t if task H1 should appear before H2."
+  (or
+   (+agenda-compare-priority h1 h2)
+   (+agenda-compare-status h1 h2)))
 
-(defun +agenda-compare-priority (a b)
+(defun +agenda-compare-priority (h1 h2)
   (cl-macrolet ((priority (item)
                           `(org-element-property :priority ,item)))
-    ;; NOTE: Priorities are numbers in Org elements.  This might differ from the priority selector logic.
-    (let ((a-priority (priority a))
-          (b-priority (priority b)))
-      (cond ((and a-priority b-priority)
-             (< a-priority b-priority))
-            (a-priority t)
-            (b-priority nil)))))
+    (let ((h1-priority (priority h1))
+          (h2-priority (priority h2)))
+      (cond ((and h1-priority h2-priority)
+             (< h1-priority h2-priority))
+            (h1-priority t)
+            (h2-priority nil)))))
+
+(defvar +agenda-status-priority
+  '(stuck scheduled deadline next not-stuck waiting inactive done))
 
 
+(defun +agenda-compare-status (t1 t2)
+  "Return t if T1 has a more pressing status than T2.
+
+See also `+agenda-status-priority'."
+  (let ((t1-status (+agenda-projects-get-heading-status t1))
+        (t2-status (+agenda-projects-get-heading-status t2)))
+    (< (cl-position t1-status +agenda-status-priority)
+       (cl-position t2-status +agenda-status-priority))))
+
+
+;; Main entry
 
 (defun +agenda-projects-block (_)
   "Format a custom GTD agenda."
@@ -263,10 +285,8 @@ return an empty string."
     (insert (org-add-props "\nPROJECTS\n" nil 'face 'org-agenda-structure) "\n")
 
     ;; Contents
-    (dolist (element elements)
-      (+agenda-projects-process-entry element 1)
-      ;; (sort elements #'+agenda-sort-pred)
-      (insert "\n"))))
+    (+agenda-insert-tasks elements 1)
+    (insert "\n")))
 
 (provide 'gtd-agenda)
 ;;; gtd-agenda.el ends here

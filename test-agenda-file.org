@@ -15,14 +15,18 @@ DEADLINE: <2021-09-11 Sat>
 * TODO Project 5 
 ** WAITING Must wait
 
-* TODO [#B] Project 5 
+* TODO [#B] Project 6
 ** WAITING Must wait
 ** NEXT Nevermind
 
 
-* TODO [#C] Project 4
+* TODO [#C] Project 7
 ** TODO All children done
 *** TODO Stuck
 ** TODO Another todo
 ** DONE Done item
+
+* TODO Project 8
+** NEXT Low priority
+** NEXT [#A] High priority
 
