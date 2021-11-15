@@ -226,13 +226,20 @@ return an empty string."
              'tags tag-list
              'org-habit-p habit-property)))))
 
-(defun +agenda-task-prefix (depth endp)
-  (if (zerop depth)
-      ""
-    (concat
-     ;; (when (not (zerop depth)) "|")
-     (make-string depth 32)
-     (if endp "╰⮞" "├⮞"))))
+(defun +agenda-task-prefix (parent-last)
+  "Format prefix arrows for task. PARENT-LAST is a list of booleans
+'(b0 b1 ... bn) where b1 indicates whether the nth ancestor of the
+task is the last of its siblings."
+  (message "%s" parent-last)
+  (let ((lastp (car parent-last))
+        (parent-continuations (reverse (cdr parent-last))))
+    (if (zerop depth)
+        ""
+      (concat
+       "   "
+       (mapconcat (lambda (lastp) (if lastp "   " "│  ")) (cdr parent-continuations) nil)
+       ;; (make-string depth 32)
+       (if lastp "╰⮞" "├⮞")))))
 
 ;; Sorting
 
@@ -248,7 +255,7 @@ return an empty string."
     (let ((h1-priority (priority h1))
           (h2-priority (priority h2)))
       (cond ((and h1-priority h2-priority)
-             (< h1-priority h2-priority))
+             (>= h1-priority h2-priority))
             (h1-priority t)
             (h2-priority nil)))))
 
@@ -262,7 +269,7 @@ return an empty string."
 See also `+agenda-status-priority'."
   (let ((t1-status (+agenda-projects-get-heading-status t1))
         (t2-status (+agenda-projects-get-heading-status t2)))
-    (< (cl-position t1-status +agenda-status-priority)
+    (<= (cl-position t1-status +agenda-status-priority)
        (cl-position t2-status +agenda-status-priority))))
 
 
@@ -283,22 +290,27 @@ See also `+agenda-status-priority'."
     (insert (org-add-props "\nPROJECTS\n" nil 'face 'org-agenda-structure) "\n")
 
     ;; Contents
-    (+agenda-insert-tasks elements 0)
+    (+agenda-insert-tasks elements 0 nil)
     (insert "\n")))
 
-(defun +agenda-insert-tasks (tasks depth)
+(defun +agenda-insert-tasks (tasks depth parent-last)
   "Insert TASKS and, recursively, their children, into the agenda
 buffer at DEPTH."
   (dolist (task (sort tasks #'+agenda-sort-pred))
     (let* ((status (+agenda-projects-get-heading-status task))
-          (children (+agenda-children task))
-          (prefix (+agenda-task-prefix depth (eq task (car (last tasks)))))
-          (formatted-headline (+agenda-format-heading task depth prefix)))
-      (message "%s" status)
+           (children (+agenda-children task))
+           (parent-last (append (->>
+                                 (last tasks)
+                                 (car)
+                                 (eq task)
+                                 (list))
+                                parent-last))
+           (prefix (+agenda-task-prefix parent-last))
+           (formatted-headline (+agenda-format-heading task depth prefix)))
       (unless (and (member status '(done inactive)) (not +agenda-show-all))
         (when (eq depth 0) (insert "\n")) ;; Space out top-level projects
         (insert formatted-headline "\n")
-        (+agenda-insert-tasks children (1+ depth))))))
+        (+agenda-insert-tasks children (1+ depth) parent-last)))))
 
 
 (provide 'gtd-agenda)

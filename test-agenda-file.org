@@ -1,7 +1,7 @@
 * TODO Project 1
 ** NEXT Next item
 
-* TODO Project 2
+* TODO [#A] Project 2
 ** TODO Deadline
 DEADLINE: <2021-09-11 Sat>
 
@@ -22,11 +22,21 @@ DEADLINE: <2021-09-11 Sat>
 
 * TODO [#C] Project 7
 ** TODO All children done
-*** TODO Stuck
 ** TODO Another todo
 ** DONE Done item
 
 * TODO Project 8
 ** NEXT Low priority
 ** NEXT [#A] High priority
+
+* TODO Deeply nested
+** NEXT a
+*** NEXT b
+**** NEXT c
+*** NEXT d
+** NEXT e
+*** NEXT f
+*** NEXT g
+**** NEXT h
+*** NEXT j
 
