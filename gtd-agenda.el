@@ -230,7 +230,6 @@ return an empty string."
   "Format prefix arrows for task. PARENT-LAST is a list of booleans
 '(b0 b1 ... bn) where b1 indicates whether the nth ancestor of the
 task is the last of its siblings."
-  (message "%s" parent-last)
   (let ((lastp (car parent-last))
         (parent-continuations (reverse (cdr parent-last))))
     (if (zerop depth)
@@ -245,9 +244,13 @@ task is the last of its siblings."
 
 (defun +agenda-sort-pred (h1 h2)
   "Returns t if task H1 should appear before H2."
-  (or
-   (+agenda-compare-priority h1 h2)
-   (+agenda-compare-status h1 h2)))
+  (let ((first-task
+         (or
+          (+agenda-compare-priority h1 h2)
+          (+agenda-compare-status h1 h2))))
+    (if (eq first-task -1)
+            nil
+            t)))
 
 (defun +agenda-compare-priority (h1 h2)
   (cl-macrolet ((priority (item)
@@ -255,13 +258,12 @@ task is the last of its siblings."
     (let ((h1-priority (priority h1))
           (h2-priority (priority h2)))
       (cond ((and h1-priority h2-priority)
-             (>= h1-priority h2-priority))
-            (h1-priority t)
-            (h2-priority nil)))))
+             (if (<= h1-priority h2-priority) 1 -1))
+            (h1-priority 1)
+            (h2-priority -1)))))
 
 (defvar +agenda-status-priority
   '(stuck scheduled deadline next not-stuck waiting default inactive done))
-
 
 (defun +agenda-compare-status (t1 t2)
   "Return t if T1 has a more pressing status than T2.
@@ -269,8 +271,10 @@ task is the last of its siblings."
 See also `+agenda-status-priority'."
   (let ((t1-status (+agenda-projects-get-heading-status t1))
         (t2-status (+agenda-projects-get-heading-status t2)))
-    (<= (cl-position t1-status +agenda-status-priority)
-       (cl-position t2-status +agenda-status-priority))))
+    (if (<= (cl-position t1-status +agenda-status-priority)
+            (cl-position t2-status +agenda-status-priority))
+        1
+      -1)))
 
 
 ;; Main entry
