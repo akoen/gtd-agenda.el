@@ -93,7 +93,7 @@
   "Compute the status of root-level task HEADING (no children)."
   (cl-assert (not (+agenda-children heading)))
   (cl-macrolet ((task-prop (prop)
-                           `(org-element-property ,prop heading)))
+                  `(org-element-property ,prop heading)))
     (cond
      ((eq (task-prop :todo-type) 'done)                  'done)
      ((task-prop :deadline)                              'deadline)
@@ -249,12 +249,12 @@ task is the last of its siblings."
           (+agenda-compare-priority h1 h2)
           (+agenda-compare-status h1 h2))))
     (if (eq first-task -1)
-            nil
-            t)))
+        nil
+      t)))
 
 (defun +agenda-compare-priority (h1 h2)
   (cl-macrolet ((priority (item)
-                          `(org-element-property :priority ,item)))
+                  `(org-element-property :priority ,item)))
     (let ((h1-priority (priority h1))
           (h2-priority (priority h2)))
       (cond ((and h1-priority h2-priority)
@@ -300,21 +300,29 @@ See also `+agenda-status-priority'."
 (defun +agenda-insert-tasks (tasks depth parent-last)
   "Insert TASKS and, recursively, their children, into the agenda
 buffer at DEPTH."
-  (dolist (task (sort tasks #'+agenda-sort-pred))
-    (let* ((status (+agenda-projects-get-heading-status task))
-           (children (+agenda-children task))
-           (parent-last (append (->>
-                                 (last tasks)
-                                 (car)
-                                 (eq task)
-                                 (list))
-                                parent-last))
-           (prefix (+agenda-task-prefix parent-last))
-           (formatted-headline (+agenda-format-heading task depth prefix)))
-      (unless (and (member status '(done inactive)) (not +agenda-show-all))
-        (when (eq depth 0) (insert "\n")) ;; Space out top-level projects
-        (insert formatted-headline "\n")
-        (+agenda-insert-tasks children (1+ depth) parent-last)))))
+  (let ((active-tasks
+         (-> (if +agenda-show-all
+                 tasks
+               (seq-filter (lambda (task)
+                             (not (member (+agenda-projects-get-heading-status task)
+                                          '(done inactive))))
+                           tasks))
+             (sort #'+agenda-sort-pred))))
+    (dolist (task active-tasks)
+      (let* ((status (+agenda-projects-get-heading-status task))
+             (children (+agenda-children task))
+             (parent-last (append (->>
+                                   (last active-tasks)
+                                   (car)
+                                   (eq task)
+                                   (list))
+                                  parent-last))
+             (prefix (+agenda-task-prefix parent-last))
+             (formatted-headline (+agenda-format-heading task depth prefix)))
+        (unless (and (member status '(done inactive)) (not +agenda-show-all))
+          (when (eq depth 0) (insert "\n")) ;; Space out top-level projects
+          (insert formatted-headline "\n")
+          (+agenda-insert-tasks children (1+ depth) parent-last))))))
 
 
 (provide 'gtd-agenda)
