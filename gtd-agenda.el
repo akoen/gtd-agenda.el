@@ -101,6 +101,7 @@
      ((string-equal (task-prop :todo-keyword) "NEXT")    'next)
      ((string-equal (task-prop :todo-keyword) "WAITING") 'waiting)
      ((string-equal (task-prop :todo-keyword) "TODO")    'inactive)
+     ((string-equal (task-prop :todo-keyword) "SOMEDAY") 'inactive)
      (t                                                  'default))))
 
 (defun +agenda-projects-get-heading-status (heading)
@@ -118,12 +119,14 @@
                  (children-all-done (cl-every (lambda (status) (eq 'done status)) child-statuses))
                  (children-all-inactive (cl-every (lambda (status) (member status '(inactive stuck done))) child-statuses)))
               (cond
+               ((string-equal keyword "SOMEDAY")  'inactive)
                ((member 'deadline child-statuses) 'deadline)
                ((member 'next child-statuses)     'not-stuck)
                ((member 'waiting child-statuses)  'waiting)
                ((and
                  children-all-done
                  (string-equal keyword "DONE"))   'done)
+
                (children-all-inactive             'stuck)
                (t                                 'default))))))
       (org-element-put-property heading :status status)
